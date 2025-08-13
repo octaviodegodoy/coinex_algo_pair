@@ -4,9 +4,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-BASE_URL = "https://api.coinex.com"
 API_KEY = "key"
 SECRET = "secret"
+
+BASE_URL = "https://api.coinex.com"
+with open('C:/Users/degod/Dev/python-coinex/key_data.txt', 'r') as file:
+         api_key = file.read().strip()
+         secret = file.read().strip()
+         print(f" Key is {api_key} and secret is {secret}")
+
 
 API_KLINE_PATH = "/v2/futures/kline"
 
@@ -54,8 +60,6 @@ def get_futures_daily_closes(market: str, days: int = 60):
     price_data = pd.DataFrame({'Price1': price1}, index=dates)
     price_data['Price1'] = pd.to_numeric(price_data['Price1'])
     price_data['Return1'] = price_data['Price1'].pct_change().cumsum()
-
-    print(f"Prices {price_data['Price1']}")
     price_data['Return1'] = price_data['Price1']
 
     # Plot
