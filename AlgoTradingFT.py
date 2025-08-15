@@ -185,8 +185,8 @@ def plot_series(price_data,symbol_y,symbol_x):
     plt.title(f'Z-scores for assets {symbol_y} and {symbol_x} ')
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.ylim(-4.0, 4.0)
-    
-    plt.show()    
+    if coint:
+        plt.show()    
 
 if __name__ == "__main__":
     main()
