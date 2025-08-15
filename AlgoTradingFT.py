@@ -37,7 +37,7 @@ def get_futures_ticker(symbol):
     j = resp.json()
     return j if j.get("code") == 0 else {"error": j}
 
-def get_futures_daily_closes(market: str, days: int = 60):
+def get_futures_data(market: str, days: int = 60):
     url = BASE_URL + API_KLINE_PATH
     params = {
         "market": market,
@@ -54,43 +54,35 @@ def get_futures_daily_closes(market: str, days: int = 60):
     ts = df['created_at'] / 1000
     df['time'] = pd.to_datetime(ts, unit='s')
 
-    price1 = np.array(df['close'])
-    dates = np.array(df['time'])
+    return df
 
-    price_data = pd.DataFrame({'Price1': price1}, index=dates)
-    price_data['Price1'] = pd.to_numeric(price_data['Price1'])
+def main():
+    data_1 = get_futures_data("BTCUSDT",days=252)
+    data_2 = get_futures_data("ETHUSDT",days=252)
+    
+
+    price1 = np.array(data_1['close'].astype(float))
+    price2 = np.array(data_2['close'].astype(float))
+    dates = np.array(data_1['time'])
+    #print(f"Type of price {type(price1)}")  
+
+    price_data = pd.DataFrame({'Price1': price1,'Price2': price2}, index=dates)
+    #price_data.to_csv("btc_price_data.csv")
+    #price_data['Price1'] = pd.to_numeric(price_data['Price1'])
     price_data['Return1'] = price_data['Price1'].pct_change().cumsum()
-    price_data['Return1'] = price_data['Price1']
+    price_data['Return2'] = price_data['Price2'].pct_change().cumsum()
 
     # Plot
     plt.figure(figsize=(10, 5))
-    plt.plot(price_data.index, price_data['Price1'], marker="o", linestyle="-")
+    plt.plot(price_data.index, price_data['Return1'], label='Cumulative returns BTCUSDT', color='red')
+    plt.plot(price_data.index, price_data['Return2'], label='Cumulative returns ETHUSDT', color='blue')
     plt.title("Price Over Time")
     plt.xlabel("Date")
     plt.ylabel("Close Price")
     plt.grid(True)
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.show()
-
-    
-    
-    closes = []
-    for candle in data["data"]:
-        ts = candle['created_at']
-        closes.append((ts, candle['close']))
-        #cleprint(f"Close price is {closes}")
-    return closes
-
-def main():
-    assets = ["BTCUSDT", "ETHUSDT"]
-    get_futures_daily_closes("BTCUSDT",days=60)
-
-
-    #for symbol in assets:
-        #closes = get_futures_daily_closes(symbol, days=60)
-        #data = get_futures_ticker(symbol)
-        #print(f"{symbol}: {data['data'][0]['close']} and {closes}")
+    plt.show()    
 
 if __name__ == "__main__":
     main()
