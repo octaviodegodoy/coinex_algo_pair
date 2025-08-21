@@ -6,25 +6,42 @@ import numpy as np
 from filterpy.kalman import KalmanFilter
 from statsmodels.tsa.stattools import adfuller
 from sklearn.linear_model import LinearRegression
+import os
 
-API_KEY = ""
-SECRET = "secret"
+BASE_URL = "https://api.coinex.com/v2"
 
-BASE_URL = "https://api.coinex.com"
-#with open('C:/Users/degod/Dev/python-coinex/key_data.txt', 'r') as file:
-         #api_key = file.read().strip()
-         #secret = file.read().strip()
-         #print(f" Key is {api_key} and secret is {secret}")
-#         print("teste")
+API_KLINE_PATH = "/futures/kline"
 
-API_KLINE_PATH = "/v2/futures/kline"
+def load_api_keys():
+    # Path to the file in Windows home folder
+    home_dir = os.path.expanduser("~")
+    key_file = os.path.join(home_dir, "Dev\python-coinex\key_data")
+
+    api_key = None
+    secret = None
+
+    # Read file line by line
+    with open(key_file, "r") as f:
+        for line in f:
+            if line.startswith("API_KEY="):
+                api_key = line.strip().split("=", 1)[1]
+            elif line.startswith("SECRET="):
+                secret = line.strip().split("=", 1)[1]
+
+    if not api_key or not secret:
+        raise ValueError("API_KEY or SECRET not found in file")
+
+    return api_key, secret
 
 def sign_request(method, path, body=""):
     ts = str(int(time.time() * 1000))
-    payload = method + path + body + ts
-    signature = hmac.new(bytes(SECRET, 'latin-1'),
-                         msg=bytes(payload, 'latin-1'),
-                         digestmod=hashlib.sha256).hexdigest().lower()
+    timestamp = str(int(time.time() * 1000))
+    sign_str = method + path + timestamp
+    signature = hmac.new(
+        SECRET.encode('latin-1'),
+        sign_str.encode('latin-1'),
+        hashlib.sha256
+    ).hexdigest().lower()
     return ts, signature
 
 def get_futures_ticker(symbol):
@@ -148,18 +165,64 @@ def check_cointegration(symbolY,symbolX,periods):
     t_check = coint_t < critical_value
     coint_flag = p_value < 0.05 and t_check
 
-    return z_scores_rolling,coint_flag,correlation,half_life 
-     
+    return z_scores_rolling,coint_flag,correlation,half_life,slope 
+
+def get_futures_positions():
+    path = "/futures/pending-position"
+    timestamp = str(int(time.time() * 1000))
+    sign_str = "GET" + path + timestamp
+    signature = hmac.new(
+        SECRET.encode('latin-1'),
+        sign_str.encode('latin-1'),
+        hashlib.sha256
+    ).hexdigest().lower()
+
+    headers = {
+        "X-COINEX-KEY": API_KEY,
+        "X-COINEX-SIGN": signature,
+        "X-COINEX-TIMESTAMP": timestamp,
+        "Content-Type": "application/json; charset=utf-8"
+    }
+    print(f"What is the path to get response ? {BASE_URL + path} api key is {API_KEY}")
+    response = requests.get(BASE_URL + path, headers=headers)
+    print(f"Positions futures {response.json()}")
+    return response.json()
+
+def get_futures_balance():
+    path = "assets/futures/balance"
+    ts, sig = sign_request("GET", path)
+    headers = {
+        "X-COINEX-KEY": API_KEY,
+        "X-COINEX-SIGN": sig,
+        "X-COINEX-TIMESTAMP": ts,
+    }
+    response = requests.get(BASE_URL + path, headers=headers)
+    print(f"Response {response.status_code}")
+    return response.json()    
 
 def main():
+    """
+    while True:
+        pos_data = get_futures_positions()
+        if pos_data["code"] != 0:
+            print("Error fetching positions:", pos_data.get("message"))
+            return
+        total_unrealized = 0
+        total_realized = 0
+        for pos in pos_data["data"]:
+             unreal = float(pos["unrealized_pnl"])
+             real = float(pos["realized_pnl"])
+             total_unrealized += unreal
+             total_realized += real
+             print(f"- {pos['market']} ({pos['side']}, {pos['open_interest']}): Unrealized PNL = {unreal}, Realized PNL = {real}")
+    """
+    get_futures_positions()
     PERIODS = 252
-
     major_pairs_y = ["BTCUSDT","ETHUSDT","ADAUSDT","AVAXUSDT"]
     major_pairs_x = ["XRPUSDT","LTCUSDT","SOLUSDT","LINKUSDT"]
 
     for i in range(len(major_pairs_y)):
         for j in range(len(major_pairs_x)):
-             print(f"Checking symbols {major_pairs_y[i]} and {major_pairs_x[j]}")
              #z_scores_rolling = check_cointegration(major_pairs_y[i],major_pairs_x[j],PERIODS)
              data_1 = get_futures_data(major_pairs_y[i],days=PERIODS)
              data_2 = get_futures_data(major_pairs_x[j],days=PERIODS)
@@ -167,16 +230,20 @@ def main():
              price2 = np.array(data_2['close'].astype(float))
              dates = np.array(data_1['time'])
              price_data = pd.DataFrame({'Price1': price1,'Price2': price2}, index=dates)
-             plot_series(price_data,major_pairs_y[i],major_pairs_x[j])       
+             plot_series(price_data,major_pairs_y[i],major_pairs_x[j])
+       
 
 def plot_series(price_data,symbol_y,symbol_x):    
     price_data['Return1'] = price_data['Price1'].pct_change().cumsum()
     price_data['Return2'] = price_data['Price2'].pct_change().cumsum()
 
-    z_scores_rolling,coint,correlation,half_life = check_cointegration(symbol_y,symbol_x,252)
-    
-    if coint and half_life < 3:
-        print(f"Is cointegrated ? {coint} half life is {half_life} z score is {z_scores_rolling[-1]} correlation is {correlation}")
+    z_scores_rolling,coint,correlation,half_life,hedge_ratio = check_cointegration(symbol_y,symbol_x,252)
+    z_score = z_scores_rolling[-1]
+    hedge_ratio = hedge_ratio[-1]
+    if coint and half_life < 3 and z_score > 0.75:
+        print(f"Is cointegrated ? {coint} half life is {half_life} z score is {z_score} correlation is {correlation} hedge ratio is {hedge_ratio}")
+        if (correlation > 0) and (z_score > 0):
+            print(f"Sell 1 part of {symbol_y} and buy {hedge_ratio} of {symbol_x}")
         plot_asset_spreads(price_data,z_scores_rolling,symbol_y,symbol_x)
 
 def plot_asset_spreads(price_data,z_scores,symbol_y,symbol_x):
@@ -209,4 +276,5 @@ def plot_asset_spreads(price_data,z_scores,symbol_y,symbol_x):
     plt.show()    
 
 if __name__ == "__main__":
+    API_KEY, SECRET = load_api_keys()
     main()
