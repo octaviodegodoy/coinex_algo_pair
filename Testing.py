@@ -410,21 +410,7 @@ def close_futures_position(market):
 
 
 def run_code():
-    response = get_min_amount_futures("ADAUSDT").json()
-    print(f"Response for minimum amount futures: {response['data'][0]['min_amount']}")
-    PERIODS = 252
-    data_1 = get_futures_data("ADAUSDT",days=PERIODS)
-    data_2 = get_futures_data("XRPUSDT",days=PERIODS)
-    price1 = np.array(data_1['close'].astype(float))
-    price2 = np.array(data_2['close'].astype(float))
-    dates = np.array(data_1['time'])
     
-    price_data = pd.DataFrame({'Price1': price1,'Price2': price2}, index=dates)
-    price_data['Return1'] = price_data['Price1'].pct_change().cumsum()
-    price_data['Return2'] = price_data['Price2'].pct_change().cumsum()
-    z_score,correlation,hedge_ratio,symbol_y,symbol_x = check_cointegration("ADAUSDT","XRPUSDT",252)
-    #plot_asset_spreads(price_data, z_score, symbol_y, symbol_x)
-    asset_volume = 50  # Total volume to be allocated between the two assets
     while True:
             z_score,correlation,hedge_ratio,symbol_y,symbol_x = verify_pairs()
             print(f"Z score is {z_score} correlation is {correlation} hedge ratio is {hedge_ratio} for symbols {symbol_y} and {symbol_x}")
