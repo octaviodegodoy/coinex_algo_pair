@@ -54,7 +54,6 @@ class RequestsClient(object):
 
     # Generate your signature string
     def gen_sign(self, method, request_path, body, timestamp):
-        print(f"Generating signature for method: {self.secret_key}")
         prepared_str = f"{method}{request_path}{body}{timestamp}"
         signature = hmac.new(
             bytes(self.secret_key, 'latin-1'), 
@@ -64,7 +63,6 @@ class RequestsClient(object):
         return signature
 
     def get_common_headers(self, signed_str, timestamp):
-        print(f"Loaded API Key: {self.access_id} ")
         headers = self.HEADERS.copy()
         headers["X-COINEX-KEY"] = self.access_id
         headers["X-COINEX-SIGN"] = signed_str
@@ -428,26 +426,18 @@ def run_code():
     #plot_asset_spreads(price_data, z_score, symbol_y, symbol_x)
     asset_volume = 50  # Total volume to be allocated between the two assets
     while True:
-         asset_symbol = "ADAUSDT"
-         response_1 = get_futures_price(asset_symbol).json()
-         last = float(response_1['data'][0]['last'])
-         index_price = float(response_1['data'][0]['index_price'])
-         mark_price = float(response_1['data'][0]['mark_price'])
-         print(f"Futures price for {asset_symbol}: last {last} and index price {index_price} and mark price {mark_price}")
-         asset_y = "ADAUSDT"
-         asset_x = "XRPUSDT"
-         volume_y,volume_x = calculate_volume(asset_y,asset_x,hedge_ratio)
-         print(f"Calculated volume for {asset_y}: {volume_y} and for {asset_x}: {volume_x}")
-         time.sleep(10)
-
-    while False:
-
             z_score,correlation,hedge_ratio,symbol_y,symbol_x = verify_pairs()
             print(f"Z score is {z_score} correlation is {correlation} hedge ratio is {hedge_ratio} for symbols {symbol_y} and {symbol_x}")
             if symbol_y is not None and symbol_x is not None:
-                if correlation < 0.0 and hedge_ratio > 1.0:
-                    volume_x = asset_volume*hedge_ratio
-                    volume_y = 2*asset_volume - volume_x 
+                volume_y,volume_x = calculate_volume(symbol_y,symbol_x,hedge_ratio)
+                min_amount_y = float(get_min_amount_futures(symbol_y).json()['data'][0]['min_amount'])
+                min_amount_x = float(get_min_amount_futures(symbol_x).json()['data'][0]['min_amount'])
+                balance_condition = volume_y > min_amount_y and volume_x > min_amount_x
+                if not balance_condition:
+                    print(f"Balance condition not met for {symbol_y} and {symbol_x}. Skipping...")
+                    time.sleep(5)
+                    continue
+                if correlation < 0.0:                    
                     print(f"Volume {volume_y} for symbol {symbol_y} and volume {volume_x} for symbol {symbol_x}")
                     if z_score > 0.0:
                         send_order_futures_market(symbol_y, "sell", volume_y)
@@ -455,17 +445,14 @@ def run_code():
                     elif z_score < 0.0:
                         send_order_futures_market(symbol_y, "buy", volume_y)
                         send_order_futures_market(symbol_x, "buy", volume_x)
-                elif correlation > 0.0 and hedge_ratio < 1.0:
-                    volume_y = asset_volume
-                    volume_x = volume_y*hedge_ratio
+                elif correlation > 0.0:
                     print(f"Volume {volume_y} for symbol {symbol_y} and volume {volume_x} for symbol {symbol_x}")
                     if z_score > 0.0:
                         print(f"Placing orders for {symbol_y} and {symbol_x} with hedge ratio {hedge_ratio}")
-                        resp_y = send_order_futures_market(symbol_y, "sell", volume_y)
-                        resp_x = send_order_futures_market(symbol_x, "buy", volume_x)
-                        print(f"Response for {symbol_y}: {resp_y.json()}")
-                        print(f"Response for {symbol_x}: {resp_x.json()}")
-                    elif z_score < 0.0: 
+                        send_order_futures_market(symbol_y, "sell", volume_y)
+                        send_order_futures_market(symbol_x, "buy", volume_x)
+                    elif z_score < 0.0:
+                        print(f"Placing orders for {symbol_y} and {symbol_x} with hedge ratio {hedge_ratio}") 
                         send_order_futures_market(symbol_y, "buy", volume_y)
                         send_order_futures_market(symbol_x, "sell", volume_x)
  
